@@ -9,7 +9,9 @@
   header{padding:14px 16px;border-bottom:1px solid #1c3a20;display:flex;justify-content:space-between;align-items:center}
   h1{font-size:15px;margin:0;letter-spacing:2px;color:#7ee081;font-weight:600}
   #count{font-size:12px;color:#7d9a80}
-  #reader{width:100%;background:#000;height:40vh;position:relative}
+  #build{font-size:10px;color:#3d5a40;text-align:right;padding:2px 16px 0}
+  #reader{width:100%;background:#000;height:40vh;position:relative;overflow:hidden}
+  #vid{width:100%;height:100%;object-fit:cover}
   #status{padding:10px 16px;font-size:13px;color:#7d9a80;min-height:20px}
   #manual{display:flex;gap:8px;padding:0 16px 10px}
   #manual input{flex:1;background:#0a140b;border:1px solid #1c3a20;color:#e8f5e9;padding:12px;
@@ -24,20 +26,23 @@
   .row .n{color:#7d9a80;font-size:12px}
 </style></head><body>
 <header><h1>GNC SCAN</h1><span id="count">0 sent</span></header>
-<div id="status">Point camera at a barcode</div>
-<div id="reader"></div>
+<div id="build">build 5 · zbar</div>
+<div id="status">Loading scanner…</div>
+<div id="reader"><video id="vid" playsinline muted></video></div>
 <div id="manual">
   <input id="mc" inputmode="numeric" placeholder="type UPC manually" />
   <button onclick="manual()">ADD</button>
 </div>
 <div id="log"></div>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.9.15/dist/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/index.js"></script>
 <script>
 const API="https://juucegncscan.piecemane999.workers.dev";
 let sent=0, last="", lastT=0;
 const statusEl=document.getElementById('status');
 const logEl=document.getElementById('log');
 const countEl=document.getElementById('count');
+const vid=document.getElementById('vid');
 function addLog(code){
   const d=document.createElement('div');d.className='row';
   d.innerHTML='<span>'+code+'</span><span class="n">#'+sent+'</span>';
@@ -47,22 +52,41 @@ async function send(code){
   code=(code||'').trim();
   if(!/^\d{6,14}$/.test(code)){statusEl.textContent='Ignored (not 6-14 digits): '+code;return;}
   const now=Date.now();
-  if(code===last && now-lastT<2500){return;} // debounce same code
+  if(code===last && now-lastT<2500){return;}
   last=code; lastT=now;
   try{
     await fetch(API+'/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
     sent++; countEl.textContent=sent+' sent'; statusEl.textContent='Sent '+code;
     addLog(code);
     if(navigator.vibrate)navigator.vibrate(40);
-  }catch(e){statusEl.textContent='SEND FAILED - tunnel down? '+e;}
+  }catch(e){statusEl.textContent='SEND FAILED '+e;}
 }
 function manual(){const i=document.getElementById('mc');send(i.value);i.value='';}
-function onScan(text){send(text);}
-if(typeof Html5Qrcode==="undefined"){
-  statusEl.textContent="SCANNER LIBRARY FAILED TO LOAD — check connection / use manual entry";
-}else{
-const h=new Html5Qrcode("reader");
-h.start({facingMode:"environment"},{fps:10,qrbox:{width:300,height:200}},
-  onScan, ()=>{}).then(()=>{statusEl.textContent='Scanner running — point at a barcode';}).catch(e=>{statusEl.textContent='Camera error: '+e+' — use manual entry below';});
+
+// Use native BarcodeDetector if real, else the ZBar WASM polyfill.
+try { window['BarcodeDetector'].getSupportedFormats(); }
+catch { window['BarcodeDetector'] = barcodeDetectorPolyfill.BarcodeDetectorPolyfill; }
+
+let detector;
+async function startScanner(){
+  try{
+    detector=new BarcodeDetector({formats:['upc_a','upc_e','ean_13','ean_8','code_128']});
+  }catch(e){ statusEl.textContent='Detector init failed: '+e; return; }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    vid.srcObject=stream; await vid.play();
+    statusEl.textContent='Scanner running — point at a barcode';
+    loop();
+  }catch(e){ statusEl.textContent='Camera error: '+e+' — use manual entry below'; }
 }
+async function loop(){
+  if(vid.readyState>=2){
+    try{
+      const codes=await detector.detect(vid);
+      if(codes && codes.length){ send(codes[0].rawValue); }
+    }catch(e){/* ignore per-frame errors */}
+  }
+  setTimeout(()=>requestAnimationFrame(loop), 200); // ~5 scans/sec
+}
+startScanner();
 </script></body></html>
