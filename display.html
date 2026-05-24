@@ -1,0 +1,95 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tag Barcodes</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;background:#f4f4ef;color:#1a1a1a}
+  header{position:sticky;top:0;background:#1a1a1a;color:#fff;padding:12px 20px;display:flex;
+    gap:16px;align-items:center;z-index:10}
+  h1{font-size:16px;margin:0;letter-spacing:3px}
+  header .stat{font-size:13px;color:#9ee0a0;margin-left:auto}
+  button{font-family:inherit;font-size:13px;padding:8px 14px;border-radius:6px;border:1px solid #444;
+    background:#2a2a2a;color:#eee;cursor:pointer}
+  button:hover{background:#3a3a3a}
+  button.danger{border-color:#7a2a2a;color:#ff9b9b}
+  #list{padding:16px;display:flex;flex-direction:column;gap:14px;max-width:760px;margin:0 auto}
+  .card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:14px 16px;
+    display:flex;align-items:center;gap:18px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .card svg{flex-shrink:0}
+  .meta{flex:1}
+  .digits{font-size:22px;letter-spacing:4px;font-weight:600}
+  .sub{font-size:12px;color:#888;margin-top:3px}
+  .idx{font-size:34px;font-weight:700;color:#cfcfcf;min-width:48px;text-align:center}
+  .x{background:none;border:none;color:#bbb;font-size:20px;cursor:pointer}
+  .x:hover{color:#c00}
+  #empty{text-align:center;color:#aaa;padding:60px 20px;font-size:15px}
+  .barwrap{background:#fff;padding:6px}
+</style></head><body>
+<header>
+  <h1>TAG BARCODES</h1>
+  <button onclick="window.print()">PRINT ALL</button>
+  <button class="danger" onclick="clearAll()">CLEAR LIST</button>
+  <span class="stat" id="stat">waiting…</span>
+</header>
+<div id="list"></div>
+<div id="empty">No scans yet. Scan something on your phone.</div>
+<script>
+const API="https://juucegncscan.piecemane999.workers.dev";
+const L=["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
+const R=["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"];
+const Lean=["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
+const Gean=["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
+const PARITY=["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+function upcCheck(d11){let o=0,e=0;for(let i=0;i<11;i++){if(i%2===0)o+=+d11[i];else e+=+d11[i];}return (10-((o*3+e)%10))%10;}
+function eanCheck(d12){let s=0;for(let i=0;i<12;i++){s+=(+d12[i])*(i%2===0?1:3);}return (10-(s%10))%10;}
+function bitsUPCA(code){ // code = 12 digits
+  let b="101";for(let i=0;i<6;i++)b+=L[+code[i]];b+="01010";for(let i=6;i<12;i++)b+=R[+code[i]];b+="101";return b;}
+function bitsEAN13(code){ // code = 13 digits
+  const first=+code[0];const par=PARITY[first];let b="101";
+  for(let i=1;i<7;i++)b+=(par[i-1]==="L"?Lean[+code[i]]:Gean[+code[i]]);
+  b+="01010";for(let i=7;i<13;i++)b+=R[+code[i]];b+="101";return b;}
+function normalize(raw){
+  // returns {bits, label, sym} or null
+  let d=raw.replace(/\D/g,"");
+  if(d.length===12){ // assume UPC-A complete
+    return {bits:bitsUPCA(d),label:d,sym:"UPC-A"};
+  }
+  if(d.length===11){ // UPC-A missing check digit
+    const c=upcCheck(d);const full=d+c;return {bits:bitsUPCA(full),label:full,sym:"UPC-A"};
+  }
+  if(d.length===13){return {bits:bitsEAN13(d),label:d,sym:"EAN-13"};}
+  if(d.length===12 ){const c=eanCheck(d);return {bits:bitsEAN13(d+c),label:d+c,sym:"EAN-13"};}
+  // 8-digit EAN-8 or odd lengths: fall back to UPC-A pad if possible
+  if(d.length>0 && d.length<11){const p=d.padStart(11,"0");const c=upcCheck(p);return {bits:bitsUPCA(p+c),label:p+c,sym:"UPC-A(pad)"};}
+  return null;
+}
+function svgFor(bits){
+  const unit=2,h=80,quiet=unit*9;
+  const w=bits.length*unit+quiet*2;
+  let rects="";let x=quiet;
+  for(let i=0;i<bits.length;i++){if(bits[i]==="1")rects+='<rect x="'+x+'" y="0" width="'+unit+'" height="'+h+'"/>';x+=unit;}
+  return '<svg class="bc" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg"><rect width="'+w+'" height="'+h+'" fill="#fff"/><g fill="#000">'+rects+'</g></svg>';
+}
+let lastLen=-1;
+async function refresh(){
+  let data;
+  try{const r=await fetch(API+'/list');data=await r.json();}
+  catch(e){document.getElementById('stat').textContent='server error';return;}
+  document.getElementById('stat').textContent=data.length+' scanned';
+  const empty=document.getElementById('empty');
+  empty.style.display=data.length?'none':'block';
+  if(data.length===lastLen)return; // no change, skip redraw
+  lastLen=data.length;
+  const list=document.getElementById('list');list.innerHTML='';
+  data.forEach((item,i)=>{
+    const n=normalize(item.code);
+    const card=document.createElement('div');card.className='card';
+    if(!n){card.innerHTML='<div class="idx">'+(i+1)+'</div><div class="meta"><div class="digits">'+item.code+'</div><div class="sub">unrecognized length — cannot render</div></div>';}
+    else{card.innerHTML='<div class="idx">'+(i+1)+'</div><div class="barwrap">'+svgFor(n.bits)+'</div><div class="meta"><div class="digits">'+n.label+'</div><div class="sub">'+n.sym+'</div></div><button class="x" onclick="del('+i+')">&times;</button>';}
+    list.appendChild(card);
+  });
+}
+async function del(i){await fetch(API+'/del',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})});lastLen=-1;refresh();}
+async function clearAll(){if(!confirm('Clear the entire list?'))return;await fetch(API+'/clear',{method:'POST'});lastLen=-1;refresh();}
+setInterval(refresh,1000);refresh();
+</script></body></html>
