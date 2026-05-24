@@ -5,11 +5,11 @@
   :root{--bg:#0d1b0f;--panel:#132516;--acc:#7ee081;--acc2:#4caf50;--txt:#e8f5e9;--dim:#7d9a80;}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;background:#0d1b0f;color:#e8f5e9;
-       display:flex;flex-direction:column;height:100vh;overflow:hidden}
+       display:flex;flex-direction:column;min-height:100vh}
   header{padding:14px 16px;border-bottom:1px solid #1c3a20;display:flex;justify-content:space-between;align-items:center}
   h1{font-size:15px;margin:0;letter-spacing:2px;color:#7ee081;font-weight:600}
   #count{font-size:12px;color:#7d9a80}
-  #reader{width:100%;background:#000;aspect-ratio:1/1;max-height:46vh;position:relative}
+  #reader{width:100%;background:#000;height:40vh;position:relative}
   #status{padding:10px 16px;font-size:13px;color:#7d9a80;min-height:20px}
   #manual{display:flex;gap:8px;padding:0 16px 10px}
   #manual input{flex:1;background:#0a140b;border:1px solid #1c3a20;color:#e8f5e9;padding:12px;
@@ -24,8 +24,8 @@
   .row .n{color:#7d9a80;font-size:12px}
 </style></head><body>
 <header><h1>GNC SCAN</h1><span id="count">0 sent</span></header>
-<div id="reader"></div>
 <div id="status">Point camera at a barcode</div>
+<div id="reader"></div>
 <div id="manual">
   <input id="mc" inputmode="numeric" placeholder="type UPC manually" />
   <button onclick="manual()">ADD</button>
