@@ -31,7 +31,7 @@
   <button onclick="manual()">ADD</button>
 </div>
 <div id="log"></div>
-<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 const API="https://juucegncscan.piecemane999.workers.dev";
 let sent=0, last="", lastT=0;
@@ -58,7 +58,11 @@ async function send(code){
 }
 function manual(){const i=document.getElementById('mc');send(i.value);i.value='';}
 function onScan(text){send(text);}
+if(typeof Html5Qrcode==="undefined"){
+  statusEl.textContent="SCANNER LIBRARY FAILED TO LOAD — check connection / use manual entry";
+}else{
 const h=new Html5Qrcode("reader");
 h.start({facingMode:"environment"},{fps:10,qrbox:{width:300,height:200}},
-  onScan, ()=>{}).catch(e=>{statusEl.textContent='Camera error: '+e+' — use manual entry below';});
+  onScan, ()=>{}).then(()=>{statusEl.textContent='Scanner running — point at a barcode';}).catch(e=>{statusEl.textContent='Camera error: '+e+' — use manual entry below';});
+}
 </script></body></html>
