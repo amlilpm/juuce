@@ -34,7 +34,7 @@
   #zoom{flex:1;accent-color:#7ee081}
 </style></head><body>
 <header><h1>GNC SCAN</h1><span id="count">0 sent</span></header>
-<div id="build">build 6 · zbar+zoom</div>
+<div id="build">build 7 · beep</div>
 <div id="status">Loading scanner…</div>
 <div id="reader"><video id="vid" playsinline muted></video><div id="frame"></div></div>
 <div id="zoomwrap"><span>ZOOM</span><input id="zoom" type="range" min="1" max="4" step="0.1" value="1"><span id="zoomval">1.0x</span></div>
@@ -67,8 +67,22 @@ async function send(code){
     await fetch(API+'/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
     sent++; countEl.textContent=sent+' sent'; statusEl.textContent='Sent '+code;
     addLog(code);
+    beep();
     if(navigator.vibrate)navigator.vibrate(40);
   }catch(e){statusEl.textContent='SEND FAILED '+e;}
+}
+// iOS ignores navigator.vibrate, so beep via Web Audio. Needs a tap to unlock.
+let actx=null;
+function unlockAudio(){ if(!actx){ try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } }
+document.addEventListener('touchstart',unlockAudio,{once:true});
+document.addEventListener('click',unlockAudio,{once:true});
+function beep(){
+  if(!actx)return;
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type='square'; o.frequency.value=880; o.connect(g); g.connect(actx.destination);
+  g.gain.setValueAtTime(0.15,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+0.15);
+  o.start(); o.stop(actx.currentTime+0.15);
 }
 function manual(){const i=document.getElementById('mc');send(i.value);i.value='';}
 
