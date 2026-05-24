@@ -34,7 +34,7 @@
   #zoom{flex:1;accent-color:#7ee081}
 </style></head><body>
 <header><h1>GNC SCAN</h1><span id="count">0 sent</span></header>
-<div id="build">build 7 · beep</div>
+<div id="build">build 8 · debounce</div>
 <div id="status">Loading scanner…</div>
 <div id="reader"><video id="vid" playsinline muted></video><div id="frame"></div></div>
 <div id="zoomwrap"><span>ZOOM</span><input id="zoom" type="range" min="1" max="4" step="0.1" value="1"><span id="zoomval">1.0x</span></div>
@@ -47,7 +47,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/index.js"></script>
 <script>
 const API="https://juucegncscan.piecemane999.workers.dev";
-let sent=0, last="", lastT=0;
+let sent=0, last="", lastT=0, lastAny=0;
 const statusEl=document.getElementById('status');
 const logEl=document.getElementById('log');
 const countEl=document.getElementById('count');
@@ -61,8 +61,9 @@ async function send(code){
   code=(code||'').trim();
   if(!/^\d{6,14}$/.test(code)){statusEl.textContent='Ignored (not 6-14 digits): '+code;return;}
   const now=Date.now();
-  if(code===last && now-lastT<2500){return;}
-  last=code; lastT=now;
+  if(now-lastAny<500){return;}            // 0.5s floor between ANY scans
+  if(code===last && now-lastT<2500){return;}  // same code: 2.5s guard
+  lastAny=now; last=code; lastT=now;
   try{
     await fetch(API+'/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
     sent++; countEl.textContent=sent+' sent'; statusEl.textContent='Sent '+code;
