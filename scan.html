@@ -24,11 +24,20 @@
        display:flex;justify-content:space-between;animation:flash .5s}
   @keyframes flash{from{background:#1c3a20}to{background:transparent}}
   .row .n{color:#7d9a80;font-size:12px}
+  #reader{position:relative}
+  #vid{transform-origin:center center;transition:transform .08s linear}
+  #frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:78%;height:34%;border:2px solid #7ee081;border-radius:8px;
+    box-shadow:0 0 0 2000px rgba(0,0,0,.28);pointer-events:none}
+  #zoomwrap{display:flex;align-items:center;gap:10px;padding:10px 16px}
+  #zoomwrap span{font-size:11px;color:#7d9a80;white-space:nowrap}
+  #zoom{flex:1;accent-color:#7ee081}
 </style></head><body>
 <header><h1>GNC SCAN</h1><span id="count">0 sent</span></header>
-<div id="build">build 5 · zbar</div>
+<div id="build">build 6 · zbar+zoom</div>
 <div id="status">Loading scanner…</div>
-<div id="reader"><video id="vid" playsinline muted></video></div>
+<div id="reader"><video id="vid" playsinline muted></video><div id="frame"></div></div>
+<div id="zoomwrap"><span>ZOOM</span><input id="zoom" type="range" min="1" max="4" step="0.1" value="1"><span id="zoomval">1.0x</span></div>
 <div id="manual">
   <input id="mc" inputmode="numeric" placeholder="type UPC manually" />
   <button onclick="manual()">ADD</button>
@@ -63,6 +72,11 @@ async function send(code){
 }
 function manual(){const i=document.getElementById('mc');send(i.value);i.value='';}
 
+// CSS magnify (iOS Safari has no real camera zoom). ZBar still decodes the
+// full-res frame underneath, so this just helps you line the barcode up.
+const zoom=document.getElementById('zoom'), zoomval=document.getElementById('zoomval');
+zoom.oninput=()=>{ vid.style.transform='scale('+zoom.value+')'; zoomval.textContent=parseFloat(zoom.value).toFixed(1)+'x'; };
+
 // Use native BarcodeDetector if real, else the ZBar WASM polyfill.
 try { window['BarcodeDetector'].getSupportedFormats(); }
 catch { window['BarcodeDetector'] = barcodeDetectorPolyfill.BarcodeDetectorPolyfill; }
@@ -73,7 +87,7 @@ async function startScanner(){
     detector=new BarcodeDetector({formats:['upc_a','upc_e','ean_13','ean_8','code_128']});
   }catch(e){ statusEl.textContent='Detector init failed: '+e; return; }
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
     vid.srcObject=stream; await vid.play();
     statusEl.textContent='Scanner running — point at a barcode';
     loop();
